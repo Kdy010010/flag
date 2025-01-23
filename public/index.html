@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <title>깃발 전쟁 게임</title>
+  <style>
+    #map {
+      width: 2000px;
+      height: 2000px;
+      position: relative;
+    }
+    .flag {
+      width: 20px;
+      height: 20px;
+      position: absolute;
+      background-color: gray; /* 기본 깃발 색상 */
+      border: 1px solid #000;
+    }
+    /* 스크롤을 위한 컨테이너 */
+    #container {
+      width: 800px;
+      height: 600px;
+      overflow: scroll;
+      border: 1px solid #ccc;
+    }
+    /* 채팅 스타일 */
+    #chat {
+      margin-top: 20px;
+    }
+    #messages {
+      list-style-type: none;
+      padding: 0;
+      height: 200px;
+      overflow-y: scroll;
+      border: 1px solid #ccc;
+    }
+    #messages li {
+      padding: 5px;
+    }
+  </style>
+</head>
+<body>
+  <h1>깃발 전쟁 게임</h1>
+  <div>
+    <label for="teamColor">팀 색상을 선택하세요:</label>
+    <select id="teamColor">
+      <option value="red">빨강</option>
+      <option value="orange">주황</option>
+      <option value="yellow">노랑</option>
+      <option value="green">초록</option>
+      <option value="blue">파랑</option>
+      <option value="indigo">남색</option>
+      <option value="violet">보라</option>
+      <option value="pink">핑크</option>
+      <option value="mint">민트</option>
+    </select>
+  </div>
+  <div id="container">
+    <div id="map"></div>
+  </div>
+  <div id="chat">
+    <input id="chatInput" autocomplete="off" placeholder="메시지를 입력하세요..." />
+    <button id="sendBtn">전송</button>
+    <ul id="messages"></ul>
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script>
+    const socket = io();
+
+    // 사용자 팀 색상 선택
+    const teamColorSelect = document.getElementById('teamColor');
+    let teamColor = teamColorSelect.value;
+    teamColorSelect.addEventListener('change', () => {
+      teamColor = teamColorSelect.value;
+    });
+
+    // 채팅 기능
+    const input = document.getElementById('chatInput');
+    const messages = document.getElementById('messages');
+    document.getElementById('sendBtn').onclick = () => {
+      if (input.value.trim() !== '') {
+        socket.emit('chat message', input.value);
+        input.value = '';
+      }
+    };
+    socket.on('chat message', (msg) => {
+      const li = document.createElement('li');
+      li.textContent = msg;
+      messages.appendChild(li);
+      messages.scrollTop = messages.scrollHeight; // 스크롤을 맨 아래로
+    });
+
+    // 맵 및 깃발 설정
+    const map = document.getElementById('map');
+
+    // 서버로부터 깃발 데이터 받기
+    let flags = [];
+    socket.on('init flags', (data) => {
+      flags = data;
+      drawFlags();
+    });
+
+    // 깃발 그리기 함수
+    function drawFlags() {
+      map.innerHTML = ''; // 기존 깃발 제거
+      flags.forEach((flag) => {
+        const flagElement = document.createElement('div');
+        flagElement.classList.add('flag');
+        flagElement.style.left = flag.x + 'px';
+        flagElement.style.top = flag.y + 'px';
+        flagElement.dataset.id = flag.id;
+        flagElement.style.backgroundColor = flag.owner ? flag.owner : 'gray';
+        map.appendChild(flagElement);
+      });
+    }
+
+    // 깃발 클릭 이벤트 처리
+    map.addEventListener('click', (e) => {
+      if (e.target.classList.contains('flag')) {
+        const flagId = parseInt(e.target.dataset.id);
+        const flagData = {
+          id: flagId,
+          owner: teamColor,
+        };
+        socket.emit('capture flag', flagData);
+      }
+    });
+
+    // 서버로부터 깃발 업데이트 받기
+    socket.on('update flag', (updatedFlag) => {
+      const flagIndex = flags.findIndex((f) => f.id === updatedFlag.id);
+      if (flagIndex !== -1) {
+        flags[flagIndex] = updatedFlag;
+        // 해당 깃발의 색상 업데이트
+        const flagElement = document.querySelector(`.flag[data-id='${updatedFlag.id}']`);
+        if (flagElement) {
+          flagElement.style.backgroundColor = updatedFlag.owner ? updatedFlag.owner : 'gray';
+        }
+      }
+    });
+  </script>
+</body>
+</html>
